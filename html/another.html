@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Screen Sharing - Viewer</title>
+  </head>
+  <body>
+    <h1>Viewing Screen Share</h1>
+    <video id="video" autoplay muted></video>
+    <script src="http://localhost:3000/socket.io/socket.io.js"></script>
+    <script>
+      const socket = io("http://localhost:3000");
+      const videoElement = document.getElementById("video");
+
+      const mediaSource = new MediaSource();
+      let sourceBuffer = null;
+      const queue = [];
+
+      videoElement.src = URL.createObjectURL(mediaSource);
+
+      mediaSource.addEventListener("sourceopen", () => {
+        console.log("MediaSource opened");
+        sourceBuffer = mediaSource.addSourceBuffer("video/webm; codecs=vp8");
+
+        sourceBuffer.addEventListener("updateend", () => {
+          if (queue.length > 0 && !sourceBuffer.updating) {
+            const chunk = queue.shift();
+            try {
+              sourceBuffer.appendBuffer(chunk);
+            } catch (err) {
+              console.error("Error appending buffer:", err);
+            }
+          }
+        });
+      });
+
+      socket.on("stream", (data) => {
+        console.log("Received data type:", data.constructor.name);
+
+        // Re-wrap ArrayBuffer as Blob
+        const blob = new Blob([data], { type: "video/webm" });
+
+        const fileReader = new FileReader();
+        fileReader.onload = () => {
+          const arrayBuffer = fileReader.result;
+          if (!sourceBuffer) {
+            queue.push(new Uint8Array(arrayBuffer));
+          } else if (sourceBuffer.updating || queue.length > 0) {
+            queue.push(new Uint8Array(arrayBuffer));
+          } else {
+            sourceBuffer.appendBuffer(new Uint8Array(arrayBuffer));
+          }
+        };
+
+        fileReader.readAsArrayBuffer(blob);
+      });
+
+      socket.on("connect", () => {
+        console.log("Connected to server to view stream.");
+      });
+
+      socket.on("disconnect", () => {
+        console.log("Disconnected from server.");
+      });
+    </script>
+  </body>
+</html>

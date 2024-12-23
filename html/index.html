@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Screen Sharing - Broadcaster</title>
+  </head>
+  <body>
+    <h1>Screen Sharing - Broadcaster</h1>
+    <button id="startSharing">Start Sharing</button>
+
+    <script src="http://192.168.1.12:3000/socket.io/socket.io.js"></script>
+    <script>
+      const socket = io("http://192.168.1.12:3000");
+      const startSharingButton = document.getElementById("startSharing");
+
+      startSharingButton.addEventListener("click", async () => {
+        try {
+          const stream = await navigator.mediaDevices.getDisplayMedia({
+            video: true,
+          });
+          const recorder = new MediaRecorder(stream, {
+            mimeType: "video/webm; codecs=vp8",
+          });
+
+          recorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+              console.log(
+                "Broadcasting data chunk type:",
+                event.data.constructor.name
+              );
+              socket.emit("stream", event.data);
+            }
+          };
+
+          recorder.start(100); // Send chunks every 100ms
+          console.log("Screen sharing started");
+        } catch (err) {
+          console.error("Error starting screen sharing:", err);
+        }
+      });
+    </script>
+  </body>
+</html>
